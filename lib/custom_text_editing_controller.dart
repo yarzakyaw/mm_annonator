@@ -38,10 +38,17 @@ class CustomTextEditingController extends TextEditingController {
         TextStyle tokenStyle = style ?? const TextStyle();
         if (dictionary.containsKey(token)) {
           tokenStyle = tokenStyle.copyWith(backgroundColor: Colors.yellow);
+          children.add(TextSpan(text: ' ', style: tokenStyle));
         } else if (newlyAddedWords.contains(token)) {
           tokenStyle = tokenStyle.copyWith(backgroundColor: Colors.green);
+          children.add(TextSpan(text: ' ', style: tokenStyle));
         }
+
         children.add(TextSpan(text: token, style: tokenStyle));
+
+        if (dictionary.containsKey(token) || newlyAddedWords.contains(token)) {
+          children.add(TextSpan(text: ' ', style: tokenStyle));
+        }
 
         currentIndex = startIndex + token.length;
       }

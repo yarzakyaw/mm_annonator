@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:mm_annonator/custom_text_editing_controller.dart';
@@ -14,6 +16,7 @@ class DatasetAnnonatorScreen extends StatefulWidget {
 
 class _DatasetAnnonatorScreenState extends State<DatasetAnnonatorScreen> {
   late CustomTextEditingController _controller;
+  final TextEditingController _originalController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final Map<String, String> _dictionary = {};
   final List<Map<String, dynamic>> _history = [];
@@ -55,6 +58,7 @@ class _DatasetAnnonatorScreenState extends State<DatasetAnnonatorScreen> {
         File file = File(result.files.single.path!);
         String content = await file.readAsString(encoding: const Utf8Codec());
         _controller.text = content; // Replace content directly
+        _originalController.text = content; // Populate second text field
         setState(() {});
       }
     } catch (e) {
@@ -149,12 +153,89 @@ class _DatasetAnnonatorScreenState extends State<DatasetAnnonatorScreen> {
   }
 
   void cleanData() {
+    // String cleanedText =
+    //     _controller.text
+    //         .replaceAll(RegExp(r'\s+'), ' ') // Remove extra spaces
+    //         .trim(); // Remove leading/trailing spaces
+    // _controller.text = cleanedText;
+    // setState(() {}); // Reflect changes in the UI
     String cleanedText =
         _controller.text
             .replaceAll(RegExp(r'\s+'), ' ') // Remove extra spaces
-            .trim(); // Remove leading/trailing spaces
+            .replaceAll('။', '။\n') // Add new line after Burmese punctuation
+            .trim();
+    String originalCleanedText =
+        _originalController.text
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .replaceAll('။', '။\n')
+            .trim();
     _controller.text = cleanedText;
-    setState(() {}); // Reflect changes in the UI
+    _originalController.text = originalCleanedText;
+    setState(() {}); // Reflect changes in both UI
+  }
+
+  Future<void> mergeData() async {
+    try {
+      String outputPath = 'reconstruction_dataset.csv';
+      File file = File(outputPath);
+      bool fileExists = await file.exists();
+
+      // Split both text fields into lines
+      List<String> tokenizedLines = _controller.text.split('\n');
+      List<String> originalLines = _originalController.text.split('\n');
+
+      // Ensure both have the same number of lines
+      int maxLines = min(tokenizedLines.length, originalLines.length);
+      List<List<String>> csvData = [
+        ['tokenized', 'original'], // Header
+        ...List.generate(
+          maxLines,
+          (index) => [
+            tokenizedLines[index].trim(),
+            originalLines[index].trim(),
+          ],
+        ),
+      ];
+
+      // Convert to CSV string
+      String csvContent = const ListToCsvConverter().convert(csvData);
+
+      // Write to file (create if not exists, overwrite if exists)
+      if (fileExists) {
+        // Optionally prompt user to overwrite (uncomment if needed)
+        /*
+      bool? shouldOverride = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('File Exists'),
+          content: const Text('The CSV file already exists. Do you want to overwrite it?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        ),
+      );
+      if (shouldOverride != true) return; // Exit if user declines
+      */
+        await file.writeAsString(csvContent, encoding: const Utf8Codec());
+      } else {
+        await file.writeAsString(csvContent, encoding: const Utf8Codec());
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dataset merged and saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error merging data: $e')));
+    }
   }
 
   @override
@@ -191,6 +272,11 @@ class _DatasetAnnonatorScreenState extends State<DatasetAnnonatorScreen> {
                             onPressed: saveDictionary,
                             child: const Text('Save Dictionary'),
                           ),
+                          const SizedBox(width: 10),
+                          ElevatedButton(
+                            onPressed: mergeData,
+                            child: const Text('Merge Data'),
+                          ),
                         ],
                       ),
                       Row(
@@ -210,8 +296,28 @@ class _DatasetAnnonatorScreenState extends State<DatasetAnnonatorScreen> {
                       ),
                     ],
                   ),
-
+                  // New Original Text Field (disabled)
                   Expanded(
+                    flex: 1,
+                    child: TextField(
+                      controller: _originalController,
+                      enabled: false, // Disable editing
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: const TextStyle(
+                        fontFamily: 'Pyidaungsu',
+                        fontSize: 16,
+                      ),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Original text...',
+                      ),
+                    ),
+                  ),
+                  // Existing Tokenized Text Field
+                  Expanded(
+                    flex: 1,
                     child: TextField(
                       controller: _controller,
                       focusNode: _focusNode,
